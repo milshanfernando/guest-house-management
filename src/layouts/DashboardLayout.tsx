@@ -4,11 +4,12 @@ import {
   X,
   Calendar,
   Bed,
-  DollarSign,
+  // DollarSign,
   TrendingUp,
   TrendingDown,
-  UserCheck,
+  // UserCheck,
   LayoutDashboard,
+  Users,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -16,10 +17,12 @@ const navItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
   { name: "Reservations", path: "/reservations", icon: Calendar },
   { name: "Rooms", path: "/rooms", icon: Bed },
-  { name: "Payments", path: "/payments", icon: DollarSign },
+  // { name: "Payments", path: "/payments", icon: DollarSign },
   { name: "Incomes", path: "/incomes", icon: TrendingUp },
   { name: "Expenses", path: "/expenses", icon: TrendingDown },
-  { name: "Assignments", path: "/assignments", icon: UserCheck },
+  // { name: "Assignments", path: "/assignments", icon: UserCheck },
+  { name: "Today Movements", path: "/today-movements", icon: Calendar },
+  { name: "Guests", path: "/guests", icon: Users },
 ];
 
 const DashboardLayout = () => {

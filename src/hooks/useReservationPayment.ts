@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api/axios";
 
 interface PaymentPayload {
@@ -11,10 +11,14 @@ interface PaymentPayload {
 }
 
 export const useReservationPayment = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: PaymentPayload) => {
       const { data } = await api.post("/incomes/updateReservation", payload);
       return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reservations"] });
     },
   });
 };

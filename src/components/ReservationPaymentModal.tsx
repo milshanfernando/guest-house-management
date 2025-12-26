@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, Calendar, CreditCard } from "lucide-react";
 import { useReservationPayment } from "../hooks/useReservationPayment";
+
+type Platform = "DIRECT" | "BOOKING" | "AIRBNB";
 
 interface Props {
   open: boolean;
@@ -17,21 +19,22 @@ export function ReservationPaymentModal({
 }: Props) {
   const { mutate, isPending } = useReservationPayment();
 
-  const [amount, setAmount] = useState<number>(0);
-  const [platform, setPlatform] = useState<"BOOKING" | "DIRECT" | "AIRBNB">(
-    "DIRECT"
-  );
+  const [amount, setAmount] = useState("");
+  const [platform, setPlatform] = useState<Platform>("DIRECT");
   const [note, setNote] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
   if (!open) return null;
 
   const submit = () => {
+    if (!amount) return;
+
     mutate(
       {
         reservationId,
         propertyId,
-        date: new Date().toISOString().slice(0, 10),
-        amount,
+        date,
+        amount: Number(amount),
         platform,
         note,
       },
@@ -42,48 +45,103 @@ export function ReservationPaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-md rounded-lg p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-6">
+        {/* HEADER */}
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Make Payment</h3>
-          <button onClick={onClose}>
-            <X />
+          <div>
+            <h3 className="text-xl font-semibold">Add Payment</h3>
+            <p className="text-sm text-gray-500">
+              Record a payment for this reservation
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <input
-          type="number"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          className="w-full px-3 py-2 border rounded"
-        />
+        {/* AMOUNT */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-600">
+            Amount (AED)
+          </label>
+          <div className="relative">
+            <CreditCard className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
+            />
+          </div>
+        </div>
 
-        <select
-          value={platform}
-          onChange={(e) =>
-            setPlatform(e.target.value as "BOOKING" | "DIRECT" | "AIRBNB")
-          }
-          className="w-full px-3 py-2 border rounded"
-        >
-          <option value="DIRECT">DIRECT</option>
-          <option value="BOOKING">BOOKING</option>
-          <option value="AIRBNB">AIRBNB</option>
-        </select>
+        {/* DATE */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-600">
+            Payment Date
+          </label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
+            />
+          </div>
+        </div>
 
-        <textarea
-          placeholder="Note"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        />
+        {/* PLATFORM */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-600">
+            Payment Platform
+          </label>
 
+          <div className="grid grid-cols-3 gap-2">
+            {(["DIRECT", "BOOKING", "AIRBNB"] as Platform[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlatform(p)}
+                className={`py-2 rounded-xl border text-sm font-medium transition
+                  ${
+                    platform === p
+                      ? "bg-green-600 text-white border-green-600"
+                      : "bg-gray-50 hover:bg-gray-100"
+                  }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* NOTE */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-600">
+            Note (optional)
+          </label>
+          <textarea
+            rows={3}
+            placeholder="Add a note..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full px-3 py-2 border rounded-xl resize-none focus:ring-2 focus:ring-green-500 outline-none"
+          />
+        </div>
+
+        {/* ACTION */}
         <button
-          disabled={isPending}
+          disabled={isPending || !amount}
           onClick={submit}
-          className="w-full py-2 bg-green-600 text-white rounded"
+          className="w-full py-2.5 rounded-xl bg-green-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Save Payment
+          {isPending ? "Saving..." : "Save Payment"}
         </button>
       </div>
     </div>

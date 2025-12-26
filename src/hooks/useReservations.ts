@@ -2,15 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
 import type { Reservation } from "../types/reservation";
 
-export const useReservations = (propertyId?: number, date?: string) => {
+export const useReservations = () => {
   return useQuery<Reservation[]>({
-    queryKey: ["reservations", propertyId, date],
+    queryKey: ["reservations"],
     queryFn: async () => {
-      const res = await api.get("/reservations/today/check-in", {
-        params: { propertyId, date },
-      });
+      const res = await api.get("/reservations");
       return res.data.data;
     },
-    enabled: !!propertyId && !!date,
+    // enabled: !!propertyId && !!date,
   });
 };

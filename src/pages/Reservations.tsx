@@ -1,14 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Reservations.tsx
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api/axios";
-import { Home, Calendar, UserPlus, RefreshCw } from "lucide-react";
+import { Home, Calendar, RefreshCw } from "lucide-react";
 import { useProperties } from "../hooks/useProperties";
 import { useRooms } from "../hooks/useRooms";
-import { useReservations } from "../hooks/useReservations";
 import { useGuests } from "../hooks/useGuests";
 import { ReservationPaymentModal } from "../components/ReservationPaymentModal";
+import { useReservationsByDate } from "../hooks/useReservationsByDate";
+import { CreateGuestModal } from "../components/CreateGuestModal";
+import toast from "react-hot-toast";
+// import { useDeleteReservation } from "../hooks/useDeleteReservation";
+// import { useReservations } from "../hooks/useReservations";
 
 interface Guest {
   id: number;
@@ -21,78 +25,28 @@ interface Guest {
 }
 
 const Reservations = () => {
-  const [selectedProperty, setSelectedProperty] = useState<number>(1);
+  const queryClient = useQueryClient();
+  const [selectedProperty, setSelectedProperty] = useState<number | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-
   const [guestSearch, setGuestSearch] = useState("");
-  const [showNewGuestForm, setShowNewGuestForm] = useState(false);
-
   const [paymentReservationId, setPaymentReservationId] = useState<
     number | null
   >(null);
-
   const [reservationStatus, setReservationStatus] = useState<string>("BOOKED");
-
-  const [newGuest, setNewGuest] = useState({
-    name: "",
-    nic: "",
-    passport: "",
-    country: "",
-    contactNo: "",
-    email: "",
-  });
-
   const [reservationDate, setReservationDate] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-
-  /* -------------------- DATA -------------------- */
+  const [openGuestModal, setOpenGuestModal] = useState(false);
 
   const { data: properties = [] } = useProperties();
-  const { data: rooms = [] } = useRooms(selectedProperty);
-  const { data: reservations = [] } = useReservations(
-    selectedProperty,
+  const { data: rooms = [] } = useRooms(selectedProperty ?? undefined);
+  const { data: reservations = [] } = useReservationsByDate(
+    selectedProperty ?? undefined,
     reservationDate
   );
-
   const { data: guests = [] } = useGuests(guestSearch);
-
-  // const { data: guests = [] } = useQuery({
-  //   queryKey: ["guests", guestSearch],
-  //   queryFn: async () => {
-  //     if (!guestSearch) return [];
-  //     const res = await api.get<Guest[]>(`/guests?search=${guestSearch}`);
-  //     return res.data.data;
-  //   },
-  //   enabled: !!guestSearch,
-  // });
-
-  /* -------------------- MUTATIONS -------------------- */
-
-  const createGuestMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.post("/guests", {
-        ...newGuest,
-        image: "image@gmail.com",
-      });
-      return res.data;
-    },
-    onSuccess: (data: Guest) => {
-      setSelectedGuest(data); // ✅ auto select
-      setShowNewGuestForm(false);
-      setGuestSearch("");
-      setNewGuest({
-        name: "",
-        nic: "",
-        passport: "",
-        country: "",
-        contactNo: "",
-        email: "",
-      });
-    },
-  });
 
   const createReservationMutation = useMutation({
     mutationFn: async () => {
@@ -105,7 +59,7 @@ const Reservations = () => {
         checkInDateTime: new Date(checkIn).toISOString(),
         checkOutDateTime: new Date(checkOut).toISOString(),
         guestId: selectedGuest.id,
-        reservationStatus: reservationStatus,
+        reservationStatus,
         propertyId: selectedProperty,
       });
 
@@ -114,7 +68,6 @@ const Reservations = () => {
     onSuccess: () => {
       setSuccessMessage("Reservation created successfully!");
       setTimeout(() => setSuccessMessage(""), 3000);
-
       setSelectedRoom(null);
       setSelectedGuest(null);
       setCheckIn("");
@@ -122,29 +75,61 @@ const Reservations = () => {
     },
   });
 
-  /* -------------------- UI -------------------- */
+  const [loading, setLoading] = useState(false);
+  const handleRefresh = async () => {
+    // Clear all states
+
+    setLoading(true);
+    setSelectedProperty(null);
+    setSelectedRoom(null);
+    setSelectedGuest(null);
+    setGuestSearch("");
+    setPaymentReservationId(null);
+    setReservationStatus("BOOKED"); // or "" if you prefer empty
+    setReservationDate("");
+    setCheckIn("");
+    setCheckOut("");
+    setSuccessMessage("");
+
+    // Refetch all queries
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+      queryClient.invalidateQueries({ queryKey: ["rooms"] }),
+      queryClient.invalidateQueries({ queryKey: ["guests"] }),
+      queryClient.invalidateQueries({ queryKey: ["properties"] }),
+    ]);
+
+    toast.success("All states cleared and data refreshed!");
+    setLoading(false);
+  };
+
+  // const { mutate: deleteReservation, isPending: isDeletingReservation } =
+  //   useDeleteReservation();
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-600 rounded-full">
-            <Home className="w-6 h-6 text-white" />
+        <div className="flex items-center gap-4">
+          <div className="p-4 bg-blue-600 rounded-2xl shadow-lg">
+            <Home className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Reservations</h1>
-            <p className="text-gray-600">Create and manage reservations</p>
+            <h1 className="text-3xl font-bold text-gray-800">Reservations</h1>
+            <p className="text-gray-500">Create & manage hotel reservations</p>
           </div>
         </div>
 
         {/* Property & Date */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-4">
           <select
-            value={selectedProperty}
+            value={selectedProperty ?? ""}
             onChange={(e) => setSelectedProperty(Number(e.target.value))}
-            className="px-4 py-2 border rounded-lg"
+            className="input"
           >
+            <option value="" disabled>
+              Select Property
+            </option>
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -156,45 +141,41 @@ const Reservations = () => {
             type="date"
             value={reservationDate}
             onChange={(e) => setReservationDate(e.target.value)}
-            className="px-4 py-2 border rounded-lg"
+            className="input"
           />
 
-          <button className="flex items-center gap-2 px-4 py-2 border rounded-lg bg-white">
-            <RefreshCw className="w-4 h-4" /> Refresh
+          <button onClick={handleRefresh} className="btn-secondary">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />{" "}
+            Refresh
           </button>
         </div>
 
         {successMessage && (
-          <div className="p-3 bg-green-100 text-green-800 rounded">
+          <div className="rounded-xl bg-green-50 text-green-700 px-4 py-3 shadow-sm">
             {successMessage}
           </div>
         )}
 
         {/* Add Reservation */}
-        <div className="bg-white p-6 rounded-lg shadow border space-y-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Calendar className="w-5 h-5" /> Add Reservation
+        <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
+          <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-800">
+            <Calendar className="w-5 h-5 text-blue-600" /> Add Reservation
           </h2>
 
-          {/* Guest Search + Button */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Guest Search */}
+          <div className="grid sm:grid-cols-3 gap-4">
             <input
               placeholder="Search guest (Name / NIC / Passport)"
               value={guestSearch}
               onChange={(e) => {
                 setGuestSearch(e.target.value);
                 setSelectedGuest(null);
-                setShowNewGuestForm(false);
               }}
-              className="px-4 py-2 border rounded-lg"
+              className="input sm:col-span-2"
             />
-
             <button
-              onClick={() => {
-                setShowNewGuestForm(true);
-                setSelectedGuest(null);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+              onClick={() => setOpenGuestModal(true)}
+              className="btn-primary"
             >
               + Add New Guest
             </button>
@@ -202,88 +183,46 @@ const Reservations = () => {
 
           {/* Guest Results */}
           {guests.length > 0 && !selectedGuest && (
-            <div className="bg-gray-100 rounded p-2 max-h-40 overflow-y-auto">
+            <div className="bg-gray-50 rounded-xl divide-y max-h-44 overflow-y-auto">
               {guests.map((g) => (
                 <div
                   key={g.id}
                   onClick={() => {
                     setSelectedGuest(g);
                     setGuestSearch("");
-                    setShowNewGuestForm(false);
                   }}
-                  className="p-2 cursor-pointer hover:bg-blue-100 rounded"
+                  className="px-4 py-3 cursor-pointer hover:bg-blue-50 transition"
                 >
-                  {g.name} – {g.nic || g.passport}
+                  <p className="font-medium">{g.name}</p>
+                  <p className="text-sm text-gray-500">{g.nic || g.passport}</p>
                 </div>
               ))}
             </div>
           )}
 
-          {/* New Guest Form */}
-          {showNewGuestForm && !selectedGuest && (
-            <div className="border rounded p-4 space-y-2 bg-gray-50">
-              <h3 className="font-semibold flex items-center gap-2">
-                <UserPlus className="w-5 h-5" /> New Guest
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {Object.keys(newGuest).map((key) => (
-                  <input
-                    key={key}
-                    placeholder={key}
-                    value={(newGuest as any)[key]}
-                    onChange={(e) =>
-                      setNewGuest({ ...newGuest, [key]: e.target.value })
-                    }
-                    className="px-3 py-2 border rounded-lg"
-                  />
-                ))}
-              </div>
-
-              <button
-                onClick={() => createGuestMutation.mutate()}
-                disabled={createGuestMutation.isPending || !newGuest.name}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg"
-              >
-                Save & Continue
-              </button>
+          {/* Selected Guest */}
+          {selectedGuest && (
+            <div className="bg-blue-50 rounded-xl p-4 grid sm:grid-cols-4 gap-4 text-sm">
+              {[
+                ["Name", selectedGuest.name],
+                [
+                  "NIC / Passport",
+                  selectedGuest.nic || selectedGuest.passport || "-",
+                ],
+                ["Contact", selectedGuest.contactNo || "-"],
+                ["Country", selectedGuest.country || "-"],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-gray-500">{label}</p>
+                  <p className="font-medium">{value}</p>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Room & Dates */}
-          {/* {selectedGuest && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <select
-                value={selectedRoom ?? ""}
-                onChange={(e) => setSelectedRoom(Number(e.target.value))}
-                className="px-4 py-2 border rounded-lg"
-              >
-                <option value="">Select Room</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="date"
-                value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
-                className="px-4 py-2 border rounded-lg"
-              />
-
-              <input
-                type="date"
-                value={checkOut}
-                onChange={(e) => setCheckOut(e.target.value)}
-                className="px-4 py-2 border rounded-lg"
-              />
-            </div>
-          )} */}
+          {/* Reservation Inputs */}
           {selectedGuest && (
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              {/* Room is OPTIONAL */}
+            <div className="grid sm:grid-cols-4 gap-4">
               <select
                 value={selectedRoom ?? ""}
                 onChange={(e) =>
@@ -291,7 +230,7 @@ const Reservations = () => {
                     e.target.value ? Number(e.target.value) : null
                   )
                 }
-                className="px-4 py-2 border rounded-lg"
+                className="input"
               >
                 <option value="">No Room (Optional)</option>
                 {rooms.map((r) => (
@@ -305,25 +244,19 @@ const Reservations = () => {
                 type="date"
                 value={checkIn}
                 onChange={(e) => setCheckIn(e.target.value)}
-                className="px-4 py-2 border rounded-lg"
+                className="input"
               />
-
               <input
                 type="date"
                 value={checkOut}
                 onChange={(e) => setCheckOut(e.target.value)}
-                className="px-4 py-2 border rounded-lg"
+                className="input"
               />
 
-              {/* ✅ STATUS SELECT */}
               <select
                 value={reservationStatus}
-                onChange={(e) =>
-                  setReservationStatus(
-                    e.target.value as "BOOKED" | "CHECKED_IN"
-                  )
-                }
-                className="px-4 py-2 border rounded-lg"
+                onChange={(e) => setReservationStatus(e.target.value)}
+                className="input"
               >
                 <option value="BOOKED">BOOKED</option>
                 <option value="CHECKED_IN">CHECKED IN</option>
@@ -335,7 +268,7 @@ const Reservations = () => {
           {selectedGuest && selectedProperty && (
             <button
               onClick={() => createReservationMutation.mutate()}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg"
+              className="btn-success"
             >
               Create Reservation
             </button>
@@ -343,51 +276,42 @@ const Reservations = () => {
         </div>
 
         {/* Reservation List */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
           {reservations.map((r) => {
-            const isDirect = r.type === "DIRECT";
             const isPending = r.paymetStatus === "PENDING";
-
             return (
               <div
                 key={r.id}
-                className="bg-white p-4 rounded-lg shadow border space-y-2"
+                className="bg-white rounded-2xl p-4 shadow-sm space-y-2"
               >
-                <h3 className="font-semibold">{r.guest.name}</h3>
-                <p className="text-sm">Room: {r.room.name}</p>
-                <p className="text-sm">
+                <h3 className="font-semibold text-gray-800">{r.guest.name}</h3>
+                <p className="text-sm text-gray-500">Room: {r.room.name}</p>
+                <p className="text-xs text-gray-400">
                   {new Date(r.checkInDateTime).toLocaleString()}
                 </p>
 
                 {isPending && (
                   <button
                     onClick={() => setPaymentReservationId(r.id)}
-                    className={`w-full py-2 rounded text-white ${
-                      isDirect ? "bg-green-600" : "bg-gray-400"
-                    }`}
+                    className="w-full mt-2 py-2 rounded-xl bg-green-600 text-white"
                   >
                     Make Payment
                   </button>
                 )}
+                {/* <button
+                  onClick={() => deleteReservation(r.id)}
+                  disabled={isDeletingReservation}
+                  className="w-full mt-2 py-2 rounded-xl bg-red-600 text-white"
+                >
+                  {isDeletingReservation ? "Deleting..." : "Delete Reservation"}
+                </button> */}
               </div>
             );
           })}
         </div>
-
-        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {reservations.map((r) => (
-            <div key={r.id} className="bg-white p-4 rounded-lg shadow border">
-              <h3 className="font-semibold">{r.guest.name}</h3>
-              <p className="text-sm">Room: {r.room.name}</p>
-              <p className="text-sm">
-                {new Date(r.checkInDateTime).toLocaleString()}
-              </p>
-            </div>
-          ))}
-        </div> */}
       </div>
 
-      {paymentReservationId && (
+      {paymentReservationId && selectedProperty && (
         <ReservationPaymentModal
           open={!!paymentReservationId}
           reservationId={paymentReservationId}
@@ -395,6 +319,16 @@ const Reservations = () => {
           onClose={() => setPaymentReservationId(null)}
         />
       )}
+
+      <CreateGuestModal
+        open={openGuestModal}
+        onClose={() => setOpenGuestModal(false)}
+        onSuccess={(guest) => {
+          toast.success("Guest created successfully");
+          setSelectedGuest(guest);
+          setGuestSearch("");
+        }}
+      />
     </div>
   );
 };
