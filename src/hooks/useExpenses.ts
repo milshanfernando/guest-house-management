@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
 
@@ -7,6 +8,7 @@ export interface Expense {
   type: string;
   note: string;
   date: string;
+  propertyLinks?: any[];
 }
 
 interface UseExpensesParams {

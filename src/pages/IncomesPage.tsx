@@ -1,13 +1,30 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw } from "lucide-react";
+
 import { useProperties } from "../hooks/useProperties";
 import { useIncomes } from "../hooks/useIncomes";
-import { AddIncomeModal } from "../components/AddIncomeModal";
 import { useReservations } from "../hooks/useReservations";
-// import { useDeleteIncome } from "../hooks/useDeleteIncome";
+import { useDeleteIncome } from "../hooks/useDeleteIncome";
+import { AddIncomeModal } from "../components/AddIncomeModal";
 
 type ViewType = "monthly" | "daily" | "range";
+
+/* ================= NIGHT CALCULATION ================= */
+function calculateNights(
+  checkIn?: string | null,
+  checkOut?: string | null
+): number | null {
+  if (!checkIn || !checkOut) return null;
+
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+
+  const diffMs = end.getTime() - start.getTime();
+  const nights = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  return nights > 0 ? nights : null;
+}
 
 export default function IncomesPage() {
   const [propertyId, setPropertyId] = useState<number | "all">("all");
@@ -22,12 +39,8 @@ export default function IncomesPage() {
 
   const { data: properties = [], isPending: propertiesLoading } =
     useProperties();
-  const { data: dirrectIncomes = [], isPending: dirrectIncomesLoading } =
-    useReservations();
 
-  // const { mutate: deleteIncome, isPending: isDeletingIncome } =
-  //   useDeleteIncome();
-
+  /* ================= QUERY PARAMS ================= */
   const params = useMemo(() => {
     let from: string | undefined;
     let to: string | undefined;
@@ -56,59 +69,77 @@ export default function IncomesPage() {
     isPending: incomesLoading,
   } = useIncomes(params);
 
+  const { data: reservations = [] } = useReservations(
+    params.fromDate!,
+    params.toDate!,
+    params.propertyId
+  );
+
+  const { mutate: deleteIncome, isPending: isDeletingIncome } =
+    useDeleteIncome();
+
+  /* ================= MAP RESERVATIONS ================= */
+  const reservationMap = useMemo(() => {
+    return reservations.reduce<Record<number, any>>((acc, r) => {
+      if (r.incomeId) acc[r.incomeId] = r;
+      return acc;
+    }, {});
+  }, [reservations]);
+
+  /* ================= GROUP BY PROPERTY ================= */
+  const incomesByProperty = useMemo(() => {
+    return incomes.reduce<
+      Record<
+        string,
+        {
+          total: number;
+          platformTotals: Record<string, number>;
+          items: any[];
+        }
+      >
+    >((acc, income) => {
+      const propertyName = income.property.name;
+      const platform = income.platform || "OTHER";
+
+      if (!acc[propertyName]) {
+        acc[propertyName] = {
+          total: 0,
+          platformTotals: {},
+          items: [],
+        };
+      }
+
+      acc[propertyName].total += income.amount;
+      acc[propertyName].platformTotals[platform] =
+        (acc[propertyName].platformTotals[platform] || 0) + income.amount;
+
+      acc[propertyName].items.push({
+        ...income,
+        reservation: reservationMap[income.id] || null,
+      });
+
+      return acc;
+    }, {});
+  }, [incomes, reservationMap]);
+
   const totalIncome = useMemo(
     () => incomes.reduce((sum, i) => sum + i.amount, 0),
     [incomes]
   );
 
-  const incomeByProperty = useMemo(() => {
-    return incomes.reduce<Record<string, number>>((acc, i) => {
-      const name = i.property.name;
-      acc[name] = (acc[name] || 0) + i.amount;
-      return acc;
-    }, {});
-  }, [incomes]);
-
-  const incomeByPropertyPlatform = useMemo(() => {
-    return incomes.reduce<Record<string, number>>((acc, i) => {
-      const key = `${i.property.name} • ${i.platform || "OTHER"}`;
-      acc[key] = (acc[key] || 0) + i.amount;
-      return acc;
-    }, {});
-  }, [incomes]);
-
-  const reservationByIncomeId = useMemo(() => {
-    return dirrectIncomes.reduce<Record<number, any>>((acc, r) => {
-      if (r.incomeId) acc[r.incomeId] = r;
-      return acc;
-    }, {});
-  }, [dirrectIncomes]);
-
-  const incomesByProperty = useMemo(() => {
-    return incomes.reduce<Record<string, any[]>>((acc, income) => {
-      const propertyName = income.property.name;
-      if (!acc[propertyName]) acc[propertyName] = [];
-      acc[propertyName].push({
-        ...income,
-        reservation: reservationByIncomeId[income.id] || null,
-      });
-      return acc;
-    }, {});
-  }, [incomes, reservationByIncomeId]);
-
-  if (propertiesLoading || incomesLoading || dirrectIncomesLoading) {
+  if (propertiesLoading || incomesLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm">
-        <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-3" />
-        <p className="text-sm text-gray-500">Loading income data...</p>
+      <div className="bg-white rounded-xl p-12 text-center">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-3" />
+        Loading income data...
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* ================= FILTERS ================= */}
-      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+      <div className="bg-white rounded-xl p-5 space-y-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <select
             value={propertyId}
@@ -117,7 +148,7 @@ export default function IncomesPage() {
                 e.target.value === "all" ? "all" : Number(e.target.value)
               )
             }
-            className="rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            className="rounded-lg px-3 py-2 bg-gray-50 border"
           >
             <option value="all">All Properties</option>
             {properties.map((p) => (
@@ -130,7 +161,7 @@ export default function IncomesPage() {
           <select
             value={viewType}
             onChange={(e) => setViewType(e.target.value as ViewType)}
-            className="rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            className="rounded-lg px-3 py-2 bg-gray-50 border"
           >
             <option value="monthly">Monthly</option>
             <option value="daily">Daily</option>
@@ -142,7 +173,7 @@ export default function IncomesPage() {
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+              className="rounded-lg px-3 py-2 bg-gray-50 border"
             />
           )}
 
@@ -151,7 +182,7 @@ export default function IncomesPage() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+              className="rounded-lg px-3 py-2 bg-gray-50 border"
             />
           )}
 
@@ -161,13 +192,13 @@ export default function IncomesPage() {
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                className="rounded-lg px-3 py-2 bg-gray-50 border"
               />
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                className="rounded-lg px-3 py-2 bg-gray-50 border"
               />
             </>
           )}
@@ -176,7 +207,7 @@ export default function IncomesPage() {
         <div className="flex justify-end gap-3">
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-sm flex items-center gap-2 transition"
+            className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -184,7 +215,7 @@ export default function IncomesPage() {
 
           <button
             onClick={() => setShowAdd(true)}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm flex items-center gap-2 transition"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add Income
@@ -193,104 +224,115 @@ export default function IncomesPage() {
       </div>
 
       {/* ================= TOTAL ================= */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm opacity-90">Total Income</h3>
-          AED
-        </div>
-        <p className="text-4xl font-semibold mt-2">
+      <div>
+        <p className="text-sm text-gray-500">Total Income</p>
+        <p className="text-3xl font-semibold text-gray-900">
           AED {totalIncome.toFixed(2)}
         </p>
       </div>
 
-      {/* ================= BY PROPERTY + PLATFORM ================= */}
-      <div className="bg-white rounded-2xl shadow-sm p-6">
-        <h3 className="font-semibold mb-4">Income by Property & Platform</h3>
-
-        {Object.keys(incomeByPropertyPlatform).length === 0 ? (
-          <p className="text-sm text-gray-400">No data available</p>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(incomeByPropertyPlatform).map(([key, amount]) => (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 hover:bg-gray-100 transition"
-              >
-                <span className="text-sm text-gray-600">{key}</span>
-                <span className="font-semibold text-gray-900">
-                  AED {amount.toFixed(2)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ================= BY PROPERTY ================= */}
-      <div className="bg-white rounded-2xl shadow-sm p-6">
-        <h3 className="font-semibold mb-4">Income by Property</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.entries(incomeByProperty).map(([name, amount]) => (
-            <div
-              key={name}
-              className="rounded-xl bg-gray-50 p-4 hover:bg-gray-100 transition"
-            >
-              <p className="text-sm text-gray-500">{name}</p>
-              <p className="text-xl font-semibold">AED {amount.toFixed(2)}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ================= INCOME DETAILS ================= */}
-      {Object.entries(incomesByProperty).map(([propertyName, items]) => (
-        <div key={propertyName} className="bg-white rounded-2xl shadow-sm p-6">
-          <h3 className="font-semibold text-lg mb-4">{propertyName}</h3>
-
-          <div className="space-y-4">
-            {items.map((income) => (
-              <div
-                key={income.id}
-                className="rounded-xl bg-gray-50 p-4 hover:bg-gray-100 transition"
-              >
-                <div className="flex justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">
-                      {new Date(income.date).toLocaleDateString()}
-                    </p>
-                    <p className="font-semibold">
-                      AED {income.amount.toFixed(2)} • {income.platform}
-                    </p>
-                  </div>
-
-                  <span className="text-xs px-2 py-1 rounded-full font-bold text-blue-700">
-                    #{income.id}
+      {/* ================= PROPERTY SECTIONS ================= */}
+      {Object.entries(incomesByProperty).map(
+        ([propertyName, { total, platformTotals, items }]) => (
+          <div key={propertyName} className="space-y-4">
+            {/* PROPERTY HEADER */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">{propertyName}</h3>
+                <div className="h-0.5 w-12 bg-blue-600 rounded-full mt-1" />
+                <p className="text-sm text-gray-500 mt-1">
+                  Total:{" "}
+                  <span className="font-medium text-gray-800">
+                    AED {total.toFixed(2)}
                   </span>
-                </div>
-
-                {income.reservation && (
-                  <div className="mt-3 text-sm text-gray-600">
-                    <p>
-                      <strong>Guest:</strong> {income.reservation.guest?.name}
-                    </p>
-                    <p>
-                      <strong>Room:</strong> {income.reservation.room?.name}
-                    </p>
-                  </div>
-                )}
-
-                {/* <button
-                  onClick={() => deleteIncome(income.id)}
-                  disabled={isDeletingIncome}
-                  className="text-red-600 hover:underline text-sm mt-2"
-                >
-                  Delete
-                </button> */}
+                </p>
               </div>
-            ))}
+
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(platformTotals).map(([platform, amount]) => (
+                  <span
+                    key={platform}
+                    className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium border border-blue-100"
+                  >
+                    {platform}: AED {amount.toFixed(2)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* RECORDS */}
+            <div className="divide-y bg-white rounded-xl shadow-sm">
+              {items.map((income) => {
+                const r = income.reservation;
+
+                return (
+                  <div
+                    key={income.id}
+                    className="py-4 pl-4 border-l-4 border-blue-500 bg-gradient-to-r from-blue-50/40 to-transparent hover:from-blue-100/60 transition rounded-r-xl"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1 text-sm">
+                        <p className="text-gray-500">
+                          {new Date(income.date).toLocaleDateString()}
+                        </p>
+
+                        <p className="font-semibold text-gray-900 text-base">
+                          AED {income.amount.toFixed(2)}
+                          <span className="text-gray-500 font-normal text-sm">
+                            {" "}
+                            • {income.platform || "OTHER"}
+                          </span>
+                        </p>
+
+                        {r && (
+                          <div className="mt-2 p-3 rounded-lg bg-white  space-y-0.5">
+                            <p>
+                              Guest:{" "}
+                              <span className="font-medium text-gray-800">
+                                {r.guest?.name || "N/A"}
+                              </span>
+                            </p>
+                            <p>
+                              Room:{" "}
+                              <span className="font-medium text-gray-800">
+                                {r.room?.name || "N/A"}
+                              </span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Stay:{" "}
+                              {new Date(r.checkInDateTime).toLocaleDateString()}{" "}
+                              →{" "}
+                              {new Date(
+                                r.checkOutDateTime
+                              ).toLocaleDateString()}{" "}
+                              <span className="text-gray-500">
+                                (
+                                {calculateNights(
+                                  r.checkInDateTime,
+                                  r.checkOutDateTime
+                                )}{" "}
+                                nights)
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => deleteIncome(income.id)}
+                        disabled={isDeletingIncome}
+                        className="text-red-500 hover:text-red-700 text-sm font-medium mx-5"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      )}
 
       <AddIncomeModal
         open={showAdd}

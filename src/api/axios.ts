@@ -2,8 +2,8 @@ import axios from "axios";
 import { auth } from "../utility/auth";
 
 const api = axios.create({
-  baseURL:
-    "https://hotel-reservation-v3-test-832288845121.asia-southeast1.run.app",
+  baseURL: "http://localhost:3000",
+  // "https://hotel-reservation-v3-test-832288845121.asia-southeast1.run.app",
   headers: {
     "Content-Type": "application/json",
   },

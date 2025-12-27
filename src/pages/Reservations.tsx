@@ -8,10 +8,11 @@ import { useProperties } from "../hooks/useProperties";
 import { useRooms } from "../hooks/useRooms";
 import { useGuests } from "../hooks/useGuests";
 import { ReservationPaymentModal } from "../components/ReservationPaymentModal";
-import { useReservationsByDate } from "../hooks/useReservationsByDate";
+// import { useReservationsByDate } from "../hooks/useReservationsByDate";
 import { CreateGuestModal } from "../components/CreateGuestModal";
 import toast from "react-hot-toast";
-// import { useDeleteReservation } from "../hooks/useDeleteReservation";
+import { useReservations } from "../hooks/useReservations";
+import { useDeleteReservation } from "../hooks/useDeleteReservation";
 // import { useReservations } from "../hooks/useReservations";
 
 interface Guest {
@@ -42,9 +43,10 @@ const Reservations = () => {
 
   const { data: properties = [] } = useProperties();
   const { data: rooms = [] } = useRooms(selectedProperty ?? undefined);
-  const { data: reservations = [] } = useReservationsByDate(
-    selectedProperty ?? undefined,
-    reservationDate
+  const { data: reservations = [] } = useReservations(
+    reservationDate,
+    reservationDate,
+    selectedProperty ?? undefined
   );
   const { data: guests = [] } = useGuests(guestSearch);
 
@@ -103,8 +105,8 @@ const Reservations = () => {
     setLoading(false);
   };
 
-  // const { mutate: deleteReservation, isPending: isDeletingReservation } =
-  //   useDeleteReservation();
+  const { mutate: deleteReservation, isPending: isDeletingReservation } =
+    useDeleteReservation();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
@@ -298,13 +300,13 @@ const Reservations = () => {
                     Make Payment
                   </button>
                 )}
-                {/* <button
+                <button
                   onClick={() => deleteReservation(r.id)}
                   disabled={isDeletingReservation}
                   className="w-full mt-2 py-2 rounded-xl bg-red-600 text-white"
                 >
                   {isDeletingReservation ? "Deleting..." : "Delete Reservation"}
-                </button> */}
+                </button>
               </div>
             );
           })}

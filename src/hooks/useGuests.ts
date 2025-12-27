@@ -11,7 +11,7 @@ export const useGuests = (search: string) => {
   return useQuery<Guest[]>({
     queryKey: ["guests", search],
     queryFn: async () => {
-      const res = await api.get("/guests/search", {
+      const res = await api.get("/guests/search/name", {
         params: { name: search },
       });
       return res.data.data;

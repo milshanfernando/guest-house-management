@@ -12,11 +12,11 @@ const ROOM_TYPES = ["AC", "Non-AC"];
 const ROOM_SIZES = ["single", "double", "triple"];
 
 const ROOM_STATUSES = [
-  "occupied",
-  "available",
-  "dirty",
-  "clean",
-  "need_cleaning",
+  "OCCUPIED",
+  "AVAILABLE",
+  "DIRTY",
+  "CLEAN",
+  "NEEDS_CLEANING",
 ];
 
 /* ===================== COMPONENT ===================== */
@@ -30,7 +30,7 @@ const Rooms = () => {
     name: "",
     type: ROOM_TYPES[0],
     size: ROOM_SIZES[0],
-    status: "available",
+    roomStatus: "AVAILABLE",
   });
 
   const [successMessage, setSuccessMessage] = useState("");
@@ -55,7 +55,7 @@ const Rooms = () => {
         name: newRoom.name,
         type: newRoom.type,
         size: newRoom.size,
-        status: newRoom.status, // 👈 enum value
+        roomStatus: newRoom.roomStatus, // 👈 enum value
         propertyId: selectedProperty,
       });
 
@@ -70,7 +70,7 @@ const Rooms = () => {
         name: "",
         type: ROOM_TYPES[0],
         size: ROOM_SIZES[0],
-        status: "available",
+        roomStatus: "AVAILABLE",
       });
 
       setSuccessMessage("Room created successfully!");
@@ -185,9 +185,9 @@ const Rooms = () => {
               </select>
 
               <select
-                value={newRoom.status}
+                value={newRoom.roomStatus}
                 onChange={(e) =>
-                  setNewRoom({ ...newRoom, status: e.target.value })
+                  setNewRoom({ ...newRoom, roomStatus: e.target.value })
                 }
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               >
