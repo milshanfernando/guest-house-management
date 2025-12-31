@@ -11,6 +11,7 @@ import IncomesPage from "../pages/IncomesPage";
 import TodayMovements from "../pages/TodayMovements";
 import Guests from "../pages/Guests";
 import ExpensesPage from "../pages/ExpensesPage";
+import UnitTypeReport from "../pages/UnitTypeReport";
 
 const AppRoutes = () => {
   return (
@@ -35,6 +36,7 @@ const AppRoutes = () => {
         <Route path="today-movements" element={<TodayMovements />} />
         <Route path="guests" element={<Guests />} />
         <Route path="expenses" element={<ExpensesPage />} />
+        <Route path="unit-type-report" element={<UnitTypeReport />} />
       </Route>
 
       {/* Fallback */}

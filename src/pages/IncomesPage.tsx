@@ -7,6 +7,8 @@ import { useIncomes } from "../hooks/useIncomes";
 import { useReservations } from "../hooks/useReservations";
 import { useDeleteIncome } from "../hooks/useDeleteIncome";
 import { AddIncomeModal } from "../components/AddIncomeModal";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type ViewType = "monthly" | "daily" | "range";
 
@@ -136,6 +138,142 @@ export default function IncomesPage() {
     );
   }
 
+  const handleGeneratePdf = () => {
+    const doc = new jsPDF("p", "mm", "a4");
+
+    /* ================= HEADER ================= */
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Majestic Town Real Estate - L.L.C - S.P.C", 105, 15, {
+      align: "center",
+    });
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      "Al Khalidiya, Abu Dhabi | info@majestictown.ae | +971 54 757 5749",
+      105,
+      21,
+      { align: "center" }
+    );
+
+    doc.setFontSize(11);
+    doc.text(
+      `INCOME SUMMARY (${params.fromDate} TO ${params.toDate})`,
+      105,
+      30,
+      { align: "center" }
+    );
+
+    let startY = 38;
+
+    /* ================= PROPERTY TABLES ================= */
+    Object.entries(incomesByProperty).forEach(
+      ([propertyName, { total, platformTotals, items }], index) => {
+        if (index !== 0) startY += 10;
+
+        /* ===== PROPERTY TITLE ===== */
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(propertyName, 14, startY);
+
+        /* ===== PLATFORM SUMMARY TABLE ===== */
+        const summaryBody = Object.entries(platformTotals).map(
+          ([platform, amount]) => [platform, `AED ${amount.toFixed(2)}`]
+        );
+
+        autoTable(doc, {
+          startY: startY + 4,
+          head: [["Platform", "Amount"]],
+          body: summaryBody,
+          theme: "grid",
+          styles: { fontSize: 9 },
+          headStyles: {
+            fillColor: [240, 240, 240],
+            textColor: 0,
+            fontStyle: "bold",
+          },
+          columnStyles: {
+            1: { halign: "right" },
+          },
+        });
+
+        startY = (doc as any).lastAutoTable.finalY + 6;
+
+        /* ===== GUEST RECORDS TABLE ===== */
+        const guestRows = items.map((income) => {
+          const r = income.reservation;
+
+          return [
+            new Date(income.date).toLocaleDateString(),
+            r?.guest?.name || "N/A",
+            r?.room?.name || "N/A",
+            r?.checkInDateTime
+              ? new Date(r.checkInDateTime).toLocaleDateString()
+              : "-",
+            r?.checkOutDateTime
+              ? new Date(r.checkOutDateTime).toLocaleDateString()
+              : "-",
+            income.platform || "OTHER",
+            `AED ${income.amount.toFixed(2)}`,
+          ];
+        });
+
+        autoTable(doc, {
+          startY,
+          head: [
+            [
+              "Date",
+              "Guest Name",
+              "Room",
+              "Check-in",
+              "Check-out",
+              "Platform",
+              "Amount",
+            ],
+          ],
+          body: guestRows,
+          theme: "striped",
+          styles: { fontSize: 8 },
+          headStyles: {
+            fillColor: [220, 230, 241],
+            textColor: 0,
+            fontStyle: "bold",
+          },
+          columnStyles: {
+            6: { halign: "right" },
+          },
+        });
+
+        startY = (doc as any).lastAutoTable.finalY + 4;
+
+        /* ===== PROPERTY TOTAL ===== */
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text(`PROPERTY TOTAL: AED ${total.toFixed(2)}`, 196, startY, {
+          align: "right",
+        });
+
+        startY += 8;
+      }
+    );
+
+    /* ================= GRAND TOTAL ================= */
+    if (startY > 260) {
+      doc.addPage();
+      startY = 30;
+    }
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text(`GRAND TOTAL: AED ${totalIncome.toFixed(2)}`, 196, startY + 10, {
+      align: "right",
+    });
+
+    /* ================= SAVE ================= */
+    doc.save("income-summary.pdf");
+  };
+
   return (
     <div className="space-y-8">
       {/* ================= FILTERS ================= */}
@@ -211,6 +349,12 @@ export default function IncomesPage() {
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
+          </button>
+          <button
+            onClick={handleGeneratePdf}
+            className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+          >
+            Generate PDF
           </button>
 
           <button

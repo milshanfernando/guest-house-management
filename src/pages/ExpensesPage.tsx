@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState } from "react";
 import { Plus, Receipt, RefreshCw } from "lucide-react";
 
@@ -6,10 +7,13 @@ import { useProperties } from "../hooks/useProperties";
 import { AddExpenseModal } from "../components/AddExpenseModal";
 import { ExpensesType } from "../constants/expensesType";
 import { useDeleteExpense } from "../hooks/useDeleteExpense";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function ExpensesPage() {
   const [showAdd, setShowAdd] = useState(false);
-  const [type, setType] = useState<"all" | string>("all");
+  // const [type, setType] = useState<"all" | string>("all");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
   // --- Date Defaults (Current Month) ---
   const today = new Date();
@@ -34,13 +38,13 @@ export default function ExpensesPage() {
       const expenseDate = new Date(e.date);
       const from = new Date(fromDate);
       const to = new Date(toDate);
-      return (
-        expenseDate >= from &&
-        expenseDate <= to &&
-        (type === "all" || e.type === type)
-      );
+
+      const typeMatch =
+        selectedTypes.length === 0 || selectedTypes.includes(e.type);
+
+      return expenseDate >= from && expenseDate <= to && typeMatch;
     });
-  }, [expenses, fromDate, toDate, type]);
+  }, [expenses, fromDate, toDate, selectedTypes]);
 
   // --- TOTAL ---
   const totalAllExpenses = useMemo(() => {
@@ -48,16 +52,42 @@ export default function ExpensesPage() {
   }, [filteredExpenses]);
 
   // --- GROUP BY PROPERTY ---
+  // const expensesByProperty = useMemo(() => {
+  //   const grouped: Record<
+  //     number,
+  //     { propertyName: string; byType: Record<string, number> }
+  //   > = {};
+
+  //   filteredExpenses.forEach((e) => {
+  //     if (e.propertyLinks) {
+  //       e.propertyLinks.forEach((link) => {
+  //         const propId = link.property.id;
+  //         const propName = link.property.name;
+
+  //         if (!grouped[propId]) {
+  //           grouped[propId] = { propertyName: propName, byType: {} };
+  //         }
+
+  //         grouped[propId].byType[e.type] =
+  //           (grouped[propId].byType[e.type] || 0) + e.amount;
+  //       });
+  //     }
+  //   });
+
+  //   return grouped;
+  // }, [filteredExpenses]);
+
   const expensesByProperty = useMemo(() => {
     const grouped: Record<
-      number,
+      string,
       { propertyName: string; byType: Record<string, number> }
     > = {};
 
     filteredExpenses.forEach((e) => {
-      if (e.propertyLinks) {
+      // 🟢 HAS PROPERTY
+      if (e.propertyLinks && e.propertyLinks.length > 0) {
         e.propertyLinks.forEach((link) => {
-          const propId = link.property.id;
+          const propId = String(link.property.id);
           const propName = link.property.name;
 
           if (!grouped[propId]) {
@@ -68,10 +98,196 @@ export default function ExpensesPage() {
             (grouped[propId].byType[e.type] || 0) + e.amount;
         });
       }
+      // 🔴 NO PROPERTY → COMMON EXPENSES
+      else {
+        const commonKey = "COMMON";
+
+        if (!grouped[commonKey]) {
+          grouped[commonKey] = {
+            propertyName: "Common Expenses",
+            byType: {},
+          };
+        }
+
+        grouped[commonKey].byType[e.type] =
+          (grouped[commonKey].byType[e.type] || 0) + e.amount;
+      }
     });
 
     return grouped;
   }, [filteredExpenses]);
+
+  const expensesByPropertyWithRecords = useMemo(() => {
+    const grouped: Record<
+      string,
+      {
+        propertyName: string;
+        byType: Record<string, number>;
+        records: any[];
+      }
+    > = {};
+
+    filteredExpenses.forEach((e) => {
+      if (e.propertyLinks && e.propertyLinks.length > 0) {
+        e.propertyLinks.forEach((link) => {
+          const key = String(link.property.id);
+          const name = link.property.name;
+
+          if (!grouped[key]) {
+            grouped[key] = { propertyName: name, byType: {}, records: [] };
+          }
+
+          grouped[key].byType[e.type] =
+            (grouped[key].byType[e.type] || 0) + e.amount;
+
+          grouped[key].records.push(e);
+        });
+      } else {
+        const key = "COMMON";
+
+        if (!grouped[key]) {
+          grouped[key] = {
+            propertyName: "Common Expenses",
+            byType: {},
+            records: [],
+          };
+        }
+
+        grouped[key].byType[e.type] =
+          (grouped[key].byType[e.type] || 0) + e.amount;
+
+        grouped[key].records.push(e);
+      }
+    });
+
+    return grouped;
+  }, [filteredExpenses]);
+
+  const handleGeneratePdf = () => {
+    const doc = new jsPDF("p", "mm", "a4");
+
+    /* ===== HEADER ===== */
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Majestic Town Real Estate - L.L.C - S.P.C", 105, 15, {
+      align: "center",
+    });
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      "Al Khalidiya, Abu Dhabi | dileepa.welivita@gmail.com | +971547575749",
+      105,
+      21,
+      { align: "center" }
+    );
+
+    doc.setFontSize(11);
+    doc.text(`EXPENSES SUMMARY (${fromDate} TO ${toDate})`, 105, 30, {
+      align: "center",
+    });
+
+    let startY = 38;
+
+    /* ===== PROPERTY SECTIONS ===== */
+    Object.values(expensesByPropertyWithRecords).forEach((property) => {
+      if (startY > 240) {
+        doc.addPage();
+        startY = 20;
+      }
+
+      /* ===== PROPERTY TITLE ===== */
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(property.propertyName, 14, startY);
+
+      /* ===== SUMMARY TABLE ===== */
+      const summaryRows = Object.entries(property.byType).map(
+        ([type, amount]) => [type, `AED ${amount.toFixed(2)}`]
+      );
+
+      autoTable(doc, {
+        startY: startY + 4,
+        head: [["Type", "Amount"]],
+        body: summaryRows,
+        theme: "grid",
+        styles: { fontSize: 9 },
+        headStyles: {
+          fillColor: [240, 240, 240],
+          textColor: 0,
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          1: { halign: "right" },
+        },
+      });
+
+      startY = (doc as any).lastAutoTable.finalY + 6;
+
+      /* ===== DETAILED RECORDS ===== */
+      const detailRows = property.records.map((e) => [
+        new Date(e.date).toLocaleDateString(),
+        e.type,
+        e.note || "-",
+        `AED ${e.amount.toFixed(2)}`,
+      ]);
+
+      autoTable(doc, {
+        startY,
+        head: [["Date", "Type", "Note", "Amount"]],
+        body: detailRows,
+        theme: "striped",
+        styles: { fontSize: 8 },
+        headStyles: {
+          fillColor: [220, 230, 241],
+          textColor: 0,
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          3: { halign: "right" },
+        },
+      });
+
+      startY = (doc as any).lastAutoTable.finalY + 4;
+
+      /* ===== PROPERTY TOTAL ===== */
+      const propertyTotal = Object.values(property.byType).reduce(
+        (s, v) => s + v,
+        0
+      );
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(`TOTAL: AED ${propertyTotal.toFixed(2)}`, 196, startY, {
+        align: "right",
+      });
+
+      startY += 10;
+    });
+
+    /* ===== GRAND TOTAL ===== */
+    if (startY > 260) {
+      doc.addPage();
+      startY = 30;
+    }
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `GRAND TOTAL EXPENSES: AED ${totalAllExpenses.toFixed(2)}`,
+      196,
+      startY,
+      { align: "right" }
+    );
+
+    doc.save("expenses-summary.pdf");
+  };
+
+  const toggleType = (type: string) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -79,9 +295,10 @@ export default function ExpensesPage() {
       <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-semibold">Filters</h2>
+
           <button
             onClick={() => {
-              setType("all");
+              setSelectedTypes([]);
               setFromDate(firstDayOfMonth.toISOString().split("T")[0]);
               setToDate(lastDayOfMonth.toISOString().split("T")[0]);
             }}
@@ -92,18 +309,39 @@ export default function ExpensesPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="rounded-xl px-3 py-2 bg-gray-50 border w-full sm:w-auto"
-          >
-            <option value="all">All Types</option>
-            {Object.values(ExpensesType).map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2">
+            {Object.values(ExpensesType).map((t) => {
+              const active = selectedTypes.includes(t);
+
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleType(t)}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition
+          ${
+            active
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
+          }
+        `}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedTypes.length > 0 && (
+            <p className="text-xs text-gray-500">
+              Showing {selectedTypes.length} selected type
+              {selectedTypes.length > 1 ? "s" : ""}
+            </p>
+          )}
+
+          <p className="text-xs text-gray-400 mt-1">
+            Hold Ctrl (Cmd on Mac) to select multiple types
+          </p>
 
           <input
             type="date"
@@ -117,6 +355,12 @@ export default function ExpensesPage() {
             onChange={(e) => setToDate(e.target.value)}
             className="rounded-xl px-3 py-2 bg-gray-50 border w-full sm:w-auto"
           />
+          <button
+            onClick={handleGeneratePdf}
+            className="px-4 py-2 rounded-xl bg-green-600 text-white flex items-center gap-2"
+          >
+            Generate PDF
+          </button>
 
           <button
             onClick={() => setShowAdd(true)}

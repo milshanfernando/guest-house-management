@@ -23,6 +23,7 @@ const navItems = [
   // { name: "Assignments", path: "/assignments", icon: UserCheck },
   { name: "Today Movements", path: "/today-movements", icon: Calendar },
   { name: "Guests", path: "/guests", icon: Users },
+  { name: "Unit Type Report", path: "/unit-type-report", icon: TrendingUp },
 ];
 
 const DashboardLayout = () => {
