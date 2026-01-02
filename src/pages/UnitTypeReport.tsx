@@ -20,7 +20,8 @@ interface ReservationRow {
 
 interface MergedRow {
   bookingNo: string;
-  unitType: string;
+  unitType: string; // SHORT name (Superior, Deluxe…)
+  unitTypeFull: string; // FULL name from file
   guestName: string;
   checkIn: string;
   checkOut: string;
@@ -105,12 +106,27 @@ const UnitTypeReport: React.FC = () => {
     const map = new Map<string, ReservationRow>();
     reservations.forEach((r) => map.set(r.bookNumber, r));
 
+    // const mergedRows: MergedRow[] = payouts.map((p) => {
+    //   const r = map.get(p.referenceNumber);
+    //   return {
+    //     bookingNo: p.referenceNumber,
+    //     net: p.net,
+    //     unitType: normalizeUnitType(r?.unitType || ""),
+    //     guestName: r?.guestName || "—",
+    //     checkIn: r?.checkIn || "—",
+    //     checkOut: r?.checkOut || "—",
+    //     rooms: r?.rooms || 0,
+    //   };
+    // });
+
     const mergedRows: MergedRow[] = payouts.map((p) => {
       const r = map.get(p.referenceNumber);
+
       return {
         bookingNo: p.referenceNumber,
         net: p.net,
-        unitType: normalizeUnitType(r?.unitType || ""),
+        unitType: normalizeUnitType(r?.unitType || ""), // SHORT
+        unitTypeFull: r?.unitType || "—", // FULL
         guestName: r?.guestName || "—",
         checkIn: r?.checkIn || "—",
         checkOut: r?.checkOut || "—",
@@ -255,7 +271,7 @@ const UnitTypeReport: React.FC = () => {
         body: report.merged.map((r) => [
           r.guestName,
           r.bookingNo,
-          r.unitType,
+          r.unitTypeFull,
           r.checkIn,
           r.checkOut,
           r.rooms,
@@ -433,6 +449,7 @@ const UnitTypeReport: React.FC = () => {
                   <th className="p-3 text-left">Guest</th>
                   <th className="p-3">Booking</th>
                   <th className="p-3">Unit</th>
+                  <th className="p-3">Unit Full</th>
                   <th className="p-3">Check-in</th>
                   <th className="p-3">Check-out</th>
                   <th className="p-3">Rooms</th>
@@ -445,6 +462,7 @@ const UnitTypeReport: React.FC = () => {
                     <td className="p-3">{r.guestName}</td>
                     <td className="p-3 text-center">{r.bookingNo}</td>
                     <td className="p-3 text-center">{r.unitType}</td>
+                    <td className="p-3 text-center">{r.unitTypeFull}</td>
                     <td className="p-3 text-center">{r.checkIn}</td>
                     <td className="p-3 text-center">{r.checkOut}</td>
                     <td className="p-3 text-center">{r.rooms}</td>
