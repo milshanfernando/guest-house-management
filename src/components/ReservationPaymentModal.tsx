@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Calendar, CreditCard } from "lucide-react";
 import { useReservationPayment } from "../hooks/useReservationPayment";
 
-type Platform = "DIRECT" | "BOOKING" | "AIRBNB";
+type Platform = "DIRECT" | "BOOKING" | "AIRBNB" | "EXPEDIA" | "AGOODA";
 
 interface Props {
   open: boolean;

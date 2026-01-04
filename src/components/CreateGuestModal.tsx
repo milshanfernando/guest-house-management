@@ -28,13 +28,22 @@ export const CreateGuestModal = ({ open, onClose, onSuccess }: Props) => {
     passport: "",
     country: "",
     contactNo: "",
-    email: "",
   });
+
+  const generateEmail = (name: string) => {
+    const cleanName = name
+      .toLowerCase()
+      .replace(/\s+/g, ".")
+      .replace(/[^a-z0-9.]/g, "");
+
+    return `${cleanName}-${crypto.randomUUID()}@guest.local`;
+  };
 
   const createGuestMutation = useMutation({
     mutationFn: async () => {
       const res = await api.post("/guests", {
         ...guest,
+        email: generateEmail(guest.name),
         image: "image@gmail.com",
       });
       return res.data.data;
@@ -48,7 +57,6 @@ export const CreateGuestModal = ({ open, onClose, onSuccess }: Props) => {
         passport: "",
         country: "",
         contactNo: "",
-        email: "",
       });
     },
     onError: () => {

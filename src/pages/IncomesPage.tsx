@@ -426,6 +426,10 @@ export default function IncomesPage() {
                             {" "}
                             • {income.platform || "OTHER"}
                           </span>
+                          <span className="text-gray-500 font-normal text-sm">
+                            {" "}
+                            • {income.note || "No notes"}
+                          </span>
                         </p>
 
                         {r && (
